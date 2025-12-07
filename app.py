@@ -791,8 +791,8 @@ with st.sidebar:
         active_user_id = st.selectbox("Mock user", [u["id"] for u in users], index=0, format_func=lambda x: user_map[x]["name"])
         results_limit = st.slider("Results per page", 3, 12, 6)
         st.markdown("---")
-        st.markdown("Classic filters (use tabs in main area)")
-        st.markdown("LLM remote provider is currently disabled by default to avoid quota issues.")
+        st.markdown("")
+        st.markdown("")
     else:
         st.write("Sidebar collapsed — click ☰ to open")
         if "active_user_id" not in st.session_state:
@@ -1409,4 +1409,5 @@ with main_col:
 
 st.markdown("---")
 st.markdown("**Notes**: this prototype uses generated mock data.")
+
 
