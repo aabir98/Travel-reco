@@ -1,4 +1,5 @@
-# app.py — Integrated & updated (fixed undefined functions)
+# app.py — Integrated & updated with itinerary bundle view (normal/packed/relaxed)
+
 import streamlit as st
 import streamlit.components.v1 as components
 import random
@@ -49,6 +50,7 @@ st.markdown(APP_CSS, unsafe_allow_html=True)
 
 PALETTE = ["#ea1e63", "#131314", "#e8e4f2", "#f6a4c8", "#ca356c", "#fdd5ed", "#86838b", "#dc6a96"]
 
+
 def format_rupee(amt):
     try:
         return f"₹{int(amt):,}"
@@ -57,6 +59,7 @@ def format_rupee(amt):
             return f"₹{float(amt):,}"
         except Exception:
             return f"₹{amt}"
+
 
 def make_svg_thumbnail(text, bg_color="#e8e4f2", fg_color="#131314", w=320, h=180):
     label = "".join([p[0] for p in text.split()][:2]).upper()
@@ -69,14 +72,16 @@ def make_svg_thumbnail(text, bg_color="#e8e4f2", fg_color="#131314", w=320, h=18
     svg_encoded = urllib.parse.quote(svg)
     return f"data:image/svg+xml;utf8,{svg_encoded}"
 
+
 def make_stock_photo(seed_id, w=640, h=420):
     seed = abs(hash(seed_id)) % 1000
     return f"https://picsum.photos/seed/{seed}/{w}/{h}"
 
+
 def make_poi_photo(poi_id, w=640, h=360):
-    # use separate seed space so POIs look different from hotels
     seed = abs(hash("poi_" + poi_id)) % 1000
     return f"https://picsum.photos/seed/{seed}/{w}/{h}"
+
 
 def make_logo_svg(kind="flight"):
     if kind == "flight":
@@ -91,6 +96,7 @@ def make_logo_svg(kind="flight"):
             <path d='M4 15h16v2H4z' fill='#a4c76b' />
         </svg>"""
     return "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
+
 
 def hotel_card_html(photo_url, hotel):
     name = _html.escape(hotel["name"])
@@ -112,11 +118,12 @@ def hotel_card_html(photo_url, hotel):
     """
     return html_block
 
+
 def poi_card_html(photo_url, poi, minutes_from_hotel=None, cost_from_hotel=None):
     name = _html.escape(poi["name"])
-    cat = _html.escape(poi.get("category",""))
-    mins = f"{minutes_from_hotel} mins" if minutes_from_hotel is not None else f"{poi.get('approx_travel_mins_from_hotel','?')} mins"
-    cost = format_rupee(cost_from_hotel) if cost_from_hotel is not None else format_rupee(poi.get("approx_cost_from_hotel",0))
+    cat = _html.escape(poi.get("category", ""))
+    mins = f"{minutes_from_hotel} mins" if minutes_from_hotel is not None else f"{poi.get('approx_travel_mins_from_hotel', '?')} mins"
+    cost = format_rupee(cost_from_hotel) if cost_from_hotel is not None else format_rupee(poi.get("approx_cost_from_hotel", 0))
     html = f"""
     <div class="poi-card">
       <img class="poi-thumb" src="{photo_url}" />
@@ -128,6 +135,7 @@ def poi_card_html(photo_url, poi, minutes_from_hotel=None, cost_from_hotel=None)
     </div>
     """
     return html
+
 
 def render_parsed_summary(parsed, dest_map):
     if not parsed:
@@ -297,6 +305,7 @@ pois_map = get_pois_map(destinations, seed=42)
 # --------------------------- City resolution & other helpers (unchanged) ---------------------------
 KNOWN_CITY_NAMES = set([d["name"].lower() for d in destinations] + ["mumbai","delhi","bengaluru","chennai","kolkata","hyderabad","pune","goa","jaipur","udaipur","agra","varanasi","amritsar","lucknow","shimla","manali","srinagar","leh","munnar","kochi"])
 
+
 def resolve_city_name(name):
     if not name: return None
     s = str(name).strip().lower()
@@ -305,7 +314,6 @@ def resolve_city_name(name):
             if d["name"].lower() == s:
                 return d["name"]
         return s.title()
-    # startswith or substring heuristics
     for d in destinations:
         dn = d["name"].lower()
         if dn.startswith(s) or s.startswith(dn) or s in dn or dn in s:
@@ -316,6 +324,7 @@ def resolve_city_name(name):
         if s2 and (s2 == dn or s2 in dn or dn in s2):
             return d["name"]
     return None
+
 
 def detect_destination_in_text(text):
     if not text: return None
@@ -335,6 +344,7 @@ def detect_destination_in_text(text):
             return chosen[0]
     chosen = sorted(matches, key=lambda x: x[2])[-1]
     return chosen[0]
+
 
 def detect_origin_in_text(text):
     if not text: return None
@@ -387,6 +397,7 @@ def _parse_budget_string(s):
             return None
     return None
 
+
 def _normalize_max_price(p):
     if p is None: return None
     if isinstance(p, (int, float)):
@@ -420,7 +431,6 @@ def parse_search(text):
     if parsed.get("from") and not parsed.get("origin"):
         parsed["origin"] = parsed.get("from"); field_sources.setdefault("origin", "gemini")
 
-    # destination resolution heuristics
     if parsed.get("destination_id"):
         if parsed.get("destination_id") not in dest_map:
             parsed.pop("destination_id", None)
@@ -440,7 +450,6 @@ def parse_search(text):
                 parsed["destination_id"] = dest_id_local
                 field_sources["destination_id"] = "heuristic"
 
-    # origin
     origin_val = parsed.get("origin") or parsed.get("from") or parsed.get("source") or None
     if origin_val:
         resolved_origin = resolve_city_name(origin_val)
@@ -456,12 +465,11 @@ def parse_search(text):
             parsed["origin"] = detected_origin
             field_sources["origin"] = "heuristic"
 
-    # budget normalization
     budget_val = None
     if isinstance(parsed.get("budget_max"), (int, float)):
         budget_val = int(parsed.get("budget_max")); field_sources.setdefault("budget_max", "gemini")
     elif parsed.get("max_price") and isinstance(parsed.get("max_price"), (int, float)):
-        budget_val = int(parsed.get("max_price")); field_sources.setdefault("max_price", "gemini")
+        budget_val = int(parsed.get("max_price")); field_sources.setdefault("max_stops", "gemini")
     elif parsed.get("budget_max"):
         budget_val = _parse_budget_string(parsed.get("budget_max")); field_sources.setdefault("budget_max", "gemini")
     elif parsed.get("max_price"):
@@ -500,55 +508,43 @@ if "last_it_plan" not in st.session_state: st.session_state["last_it_plan"] = No
 if "chosen_hotel_cache" not in st.session_state: st.session_state["chosen_hotel_cache"] = {}
 if "quick_explore_cache" not in st.session_state: st.session_state["quick_explore_cache"] = {}
 if "explore_dest" not in st.session_state: st.session_state["explore_dest"] = None
+if "only_show_mode" not in st.session_state:
+    st.session_state["only_show_mode"] = None
 
 def log_event(event_type, user_id, item_id):
     st.session_state["events"].append({"event":event_type,"user":user_id,"item":item_id,"ts": int(time.time())})
 
-# --------------------------- Helper functions added to fix Pylance warnings ---------------------------
+# --------------------------- Helper functions ---------------------------
 
 def destination_recommendations(user_profile, parsed_signals, limit=6):
-    """
-    Return a list of destination dicts (from 'destinations') ranked for the user.
-    Heuristic: tag overlap + seasonality - price distance from user's budget (if available).
-    """
     interests = (user_profile.get("interests") or []) + (parsed_signals.get("tags") or [])
     budget_max = parsed_signals.get("budget_max") or user_profile.get("budget", {}).get("max")
     def score_dest(d):
         s = 0.0
-        # tag overlap
         for t in interests:
             if t in d.get("tags", []):
                 s += 2.0
-        # seasonality a small bonus
         s += float(d.get("seasonality", 0.6))
-        # price closeness (prefer avg_price <= budget_max)
         if budget_max:
             s += max(0, (1.0 - abs(d.get("avg_price",0) - budget_max) / (budget_max + 1)) ) * 0.5
         return s
     ranked = sorted(destinations, key=score_dest, reverse=True)[:limit]
     return ranked
 
+
 def hotel_recommendations(user_profile, parsed_signals, limit=6):
-    """
-    Return hotel dicts scored using scorer.score_item and parsed filters.
-    """
-    # filter by destination if present
     dest_id = parsed_signals.get("destination_id")
     cand = hotels
     if dest_id:
         cand = [h for h in hotels if h["destination_id"] == dest_id]
-    # budget filter
     budget = parsed_signals.get("budget_max") or user_profile.get("budget", {}).get("max")
     if budget:
         cand = [h for h in cand if h.get("price", 999999) <= budget or abs(h.get("price",0)-budget) < budget*0.5]
-    # sort by our scorer (higher is better)
     scored = sorted(cand, key=lambda x: score_item(x, user_profile, user_past_trips=user_map.get(st.session_state.get("active_user_id", users[0]["id"]), {}).get("past_trips", [])), reverse=True)
     return scored[:limit]
 
+
 def filter_flights(filters: dict):
-    """
-    filters: {"from": str or None, "to": str or None, "max_price": int or None, "max_stops": int or None}
-    """
     res = flights
     f_from = filters.get("from")
     f_to = filters.get("to")
@@ -562,14 +558,11 @@ def filter_flights(filters: dict):
         res = [f for f in res if f["price"] <= max_price]
     if max_stops is not None:
         res = [f for f in res if f["stops"] <= max_stops]
-    # sort by price then duration
     res = sorted(res, key=lambda x: (x["price"], x["duration_mins"]))
     return res
 
+
 def filter_trains(filters: dict):
-    """
-    filters: {"from": str or None, "to": str or None, "seat_class": str or None, "max_price": int or None}
-    """
     res = trains
     f_from = filters.get("from")
     f_to = filters.get("to")
@@ -586,22 +579,13 @@ def filter_trains(filters: dict):
     res = sorted(res, key=lambda x: (x["price"], x["duration_mins"]))
     return res
 
-# --------------------------- Helper: build explore view (now accepts active_user_id) ---------------------------
+
 def build_explore_view(dest_id, user_profile, parsed_signals, active_user_id):
-    """
-    Returns structured data for the Explore view:
-    - recommended_hotel (full hotel dict)
-    - hotel_reason (text)
-    - poi_list sorted & limited
-    - itinerary (from generate_itinerary)
-    """
     dest = dest_map.get(dest_id)
     if not dest:
         return None
 
-    # candidate hotels in dest
     hotels_in_dest = [h for h in hotels if h["destination_id"] == dest_id]
-    # use choose_hotel_with_gemini (fallbacks to local heuristic) to pick one
     candidate_short = []
     for c in hotels_in_dest:
         candidate_short.append({
@@ -618,11 +602,9 @@ def build_explore_view(dest_id, user_profile, parsed_signals, active_user_id):
         hid = choice.get("hotel_id")
         chosen_hotel = next((h for h in hotels_in_dest if h["id"] == hid), None)
         reason_text = choice.get("reason", "")
-    # fallback: pick nearest to budget or cheapest
     if not chosen_hotel:
         budget_max = parsed_signals.get("budget_max") if parsed_signals else None
         if budget_max:
-            # pick hotel <= budget_max and closest to budget_max, else cheapest
             under = [h for h in hotels_in_dest if h["price"] <= budget_max]
             if under:
                 chosen_hotel = sorted(under, key=lambda x: abs(x["price"] - budget_max))[0]
@@ -633,9 +615,7 @@ def build_explore_view(dest_id, user_profile, parsed_signals, active_user_id):
         if chosen_hotel:
             reason_text = f"Auto-picked: {chosen_hotel.get('rating','?')}★ • {format_rupee(chosen_hotel.get('price',0))}"
 
-    # POIs (get up to 8 most relevant)
     pois = pois_map.get(dest_id, [])[:30]
-    # rank POIs by interest overlap from parsed_signals or user_profile
     interests = parsed_signals.get("tags", []) if parsed_signals else []
     interests = interests or user_profile.get("interests", [])
     def poi_rank(p):
@@ -644,12 +624,10 @@ def build_explore_view(dest_id, user_profile, parsed_signals, active_user_id):
             for t in interests:
                 if t in p.get("category","") or t in p.get("name","").lower():
                     r += 2
-        # prefer closer to hotel
         r -= p.get("approx_travel_mins_from_hotel", 999)/100.0
         return r
     pois_sorted = sorted(pois, key=poi_rank, reverse=True)[:10]
 
-    # itinerary generation uses our itinerary module
     nights = parsed_signals.get("nights") if parsed_signals and parsed_signals.get("nights") else 2
     it = generate_itinerary(dest_id, start_date_str=None, nights=nights, interests=interests, pace="normal", pois_map=pois_map)
 
@@ -659,6 +637,142 @@ def build_explore_view(dest_id, user_profile, parsed_signals, active_user_id):
         "hotel_reason": reason_text,
         "pois": pois_sorted,
         "itinerary": it
+    }
+
+# -------- NEW: helpers for full itinerary bundle (normal / packed / relaxed) --------
+
+def _compute_poi_cost_for_itinerary(itinerary_dict):
+    total = 0
+    if not itinerary_dict:
+        return 0
+    for day in itinerary_dict.get("days", []):
+        for slot in ["morning", "afternoon", "evening"]:
+            for poi in day.get(slot, []):
+                total += poi.get("approx_cost_from_hotel", 0) or 0
+    return total
+
+
+def build_itinerary_bundle(user_profile, parsed_signals, active_user_id):
+    """
+    Build a complete trip bundle:
+    - Choose destination (from parsed or recommendations)
+    - Choose hotel (LLM/heuristic)
+    - Find flights & trains
+    - Build itineraries for paces: relaxed, normal, packed
+    - Compute approximate cost ranges
+    """
+    # destination
+    dest_id = parsed_signals.get("destination_id")
+    if not dest_id:
+        # fall back to top recommended destination
+        top_dest = destination_recommendations(user_profile, parsed_signals, limit=1)
+        if not top_dest:
+            return None
+        dest_id = top_dest[0]["id"]
+    dest = dest_map.get(dest_id)
+    if not dest:
+        return None
+
+    nights = parsed_signals.get("nights") or 2
+    interests = parsed_signals.get("tags") or user_profile.get("interests", [])
+    budget_max = parsed_signals.get("budget_max") or user_profile.get("budget", {}).get("max", None)
+    origin = parsed_signals.get("origin")
+
+    # hotel (reuse logic from build_explore_view)
+    hotels_in_dest = [h for h in hotels if h["destination_id"] == dest_id]
+    candidate_short = [{
+        "id": c.get("id"),
+        "name": c.get("name"),
+        "price": c.get("price"),
+        "rating": c.get("rating"),
+        "tags": c.get("tags", [])[:5]
+    } for c in hotels_in_dest]
+    choice = choose_hotel_with_gemini(candidate_short, user_profile, user_past_trips=user_map.get(active_user_id, {}).get("past_trips", []))
+    chosen_hotel = None
+    reason_text = ""
+    if choice and choice.get("hotel_id"):
+        hid = choice.get("hotel_id")
+        chosen_hotel = next((h for h in hotels_in_dest if h["id"] == hid), None)
+        reason_text = choice.get("reason", "")
+    if not chosen_hotel:
+        if budget_max:
+            under = [h for h in hotels_in_dest if h["price"] <= budget_max]
+            if under:
+                chosen_hotel = sorted(under, key=lambda x: abs(x["price"] - budget_max))[0]
+            else:
+                chosen_hotel = sorted(hotels_in_dest, key=lambda x: x["price"])[0] if hotels_in_dest else None
+        else:
+            chosen_hotel = sorted(hotels_in_dest, key=lambda x: x.get("price", 999999))[0] if hotels_in_dest else None
+        if chosen_hotel:
+            reason_text = f"Auto-picked: {chosen_hotel.get('rating','?')}★ • {format_rupee(chosen_hotel.get('price',0))}"
+
+    # travel options
+    to_city = dest["name"]
+    max_price = _normalize_max_price(budget_max) if budget_max else None
+
+    flight_filters = {
+        "from": origin,
+        "to": to_city,
+        "max_price": max_price or None,
+        "max_stops": 2
+    }
+    flight_options = filter_flights(flight_filters)[:3]
+
+    train_filters = {
+        "from": origin,
+        "to": to_city,
+        "seat_class": None,
+        "max_price": max_price or 3000
+    }
+    train_options = filter_trains(train_filters)[:3]
+
+    # itineraries for each pace
+    itineraries = {}
+    for pace in ["relaxed", "normal", "packed"]:
+        try:
+            it = generate_itinerary(dest_id, start_date_str=None, nights=nights, interests=interests, pace=pace, pois_map=pois_map)
+        except TypeError:
+            # in case generate_itinerary doesn't accept pace, fall back to default
+            it = generate_itinerary(dest_id, start_date_str=None, nights=nights, interests=interests, pois_map=pois_map)
+        itineraries[pace] = it
+
+    # cost computation
+    cost_summary = {}
+    base_travel_cost = None
+    if flight_options:
+        base_travel_cost = flight_options[0]["price"]
+    elif train_options:
+        base_travel_cost = train_options[0]["price"]
+    else:
+        base_travel_cost = 0
+
+    hotel_cost = (chosen_hotel["price"] * nights) if chosen_hotel else 0
+
+    for pace, it in itineraries.items():
+        poi_cost = _compute_poi_cost_for_itinerary(it)
+        base_total = base_travel_cost + hotel_cost + poi_cost
+        # show a range ±15% to account for food/misc.
+        min_cost = int(base_total * 0.85)
+        max_cost = int(base_total * 1.15)
+        cost_summary[pace] = {
+            "base_total": base_total,
+            "min": min_cost,
+            "max": max_cost,
+            "poi_cost": poi_cost,
+            "hotel_cost": hotel_cost,
+            "travel_cost": base_travel_cost
+        }
+
+    return {
+        "destination": dest,
+        "nights": nights,
+        "interests": interests,
+        "hotel": chosen_hotel,
+        "hotel_reason": reason_text,
+        "flights": flight_options,
+        "trains": train_options,
+        "itineraries": itineraries,
+        "cost_summary": cost_summary
     }
 
 # --------------------------- UI Layout ---------------------------
@@ -730,14 +844,22 @@ with side_col:
                 st.session_state["last_mode"] = "itinerary"
             else:
                 st.session_state["last_mode"] = "mixed"
+            st.session_state["only_show_mode"] = st.session_state["last_mode"]
+            try:
+                pp = st.session_state["last_parsed"]
+                did = pp.get("destination_id")
+                if did and pp.get("origin"):
+                    if dest_map.get(did, {}).get("name","").lower() == pp.get("origin","").lower():
+                        pp.pop("origin", None)
+                        st.session_state["last_parsed"] = pp
+            except Exception:
+                pass
             did = st.session_state["last_parsed"].get("destination_id")
             if did:
-                # pre-generate explore content and store in quick_explore_cache
                 ev = build_explore_view(did, active_profile, st.session_state.get("last_parsed", {}), active_user_id)
                 if ev:
                     key = f"quick_explore::{active_user_id}::{did}"
                     st.session_state["quick_explore_cache"][key] = f"Quick Explore — {ev['destination']['name']}: {ev['hotel_reason']}"
-            # no rerun; UI will update in-place
 
     st.markdown("---")
     st.markdown("#### Quick Explore")
@@ -753,14 +875,11 @@ with side_col:
         st.markdown("_No quick explores yet — click 'Explore <City>' cards in Recommendations to generate one._")
 
     if run_query and query:
+        # --- PARSING: for itinerary queries we build an augmented prompt including user profile so the LLM
+        # can better distinguish origin/destination and detect pace (relaxed/normal/packed).
         parsed = {}
-        try:
-            parsed = parse_search(query)
-        except Exception:
-            parsed = {}
-        st.session_state["last_query"] = query
-        st.session_state["last_parsed"] = parsed
         ql = query.lower()
+        # infer mode from query text
         if any(w in ql for w in ["flight","flights","air","plane"]):
             mode="flights"
         elif any(w in ql for w in ["train","trains"]):
@@ -772,6 +891,71 @@ with side_col:
         else:
             mode="mixed"
         st.session_state["last_mode"] = mode
+
+        if mode == "itinerary" and USE_GEMINI:
+            # Build a richer parsing prompt that includes the active profile and asks for pace
+            user_profile_text = json.dumps(active_profile, ensure_ascii=False)
+            parse_prompt = (
+                f"You are a travel parser. For a user with profile {user_profile_text}, "
+                f"interpret this query and extract: destination (city), origin (city, if present), "
+                f"nights (number of nights), budget_max (if present), trip_type, tags/interests, "
+                f"and the user's implied itinerary pace as one of ['relaxed','normal','packed'].\n\n"
+                f"User query: \"{query}\"\n\n"
+                f"Return a JSON object with keys: destination, destination_id (if resolvable), origin, nights, "
+                f"budget_max, trip_type, tags (array). Use plain values, don't include extra text."
+            )
+            try:
+                parsed = parse_search_with_gemini(parse_prompt) or {}
+            except Exception:
+                parsed = {}
+            # mark sources that we used gemini for
+            if parsed:
+                parsed.setdefault("_field_sources", {})
+                for k in parsed.keys():
+                    parsed["_field_sources"].setdefault(k, "gemini")
+        else:
+            # fallback/general parse using existing parse_search
+            try:
+                parsed = parse_search(query)
+            except Exception:
+                parsed = {}
+
+        # Post-parse safety fixes: remove origin==destination when ambiguous
+        try:
+            dest_id = parsed.get("destination_id")
+            origin_val = parsed.get("origin")
+            if dest_id and origin_val:
+                dest_name = dest_map.get(dest_id, {}).get("name", "").lower()
+                if dest_name and origin_val.lower() == dest_name:
+                    fs = parsed.get("_field_sources", {})
+                    if not fs.get("origin") or fs.get("origin") == "heuristic":
+                        parsed.pop("origin", None)
+        except Exception:
+            pass
+
+        # Also: if the mode is specific, only keep origin if user explicitly provided 'from' or parser says gemini
+        try:
+            if mode in ("flights", "trains", "itinerary", "hotels"):
+                fs = parsed.get("_field_sources", {})
+                explicit_from = False
+                if re.search(r'\bfrom\b', query, flags=re.IGNORECASE):
+                    explicit_from = True
+                if fs.get("origin") == "gemini":
+                    explicit_from = True
+                if not explicit_from:
+                    parsed.pop("origin", None)
+        except Exception:
+            pass
+
+        st.session_state["last_query"] = query
+        st.session_state["last_parsed"] = parsed
+
+        if mode in ("flights", "trains", "hotels", "itinerary"):
+            st.session_state["only_show_mode"] = mode
+        else:
+            st.session_state["only_show_mode"] = None
+
+        # show parsed preview in sidebar (debug / brief)
         summary = render_parsed_summary(parsed, dest_map)
         if summary:
             parsed_preview.markdown(f"**Interpreted:** {summary}")
@@ -785,7 +969,7 @@ with side_col:
             st.json(fs)
     else:
         parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-        mode = st.session_state.get("last_mode", None)
+        mode = st.session_state.get("last_mode", None) or st.session_state.get("only_show_mode", None)
         if parsed:
             summary = render_parsed_summary(parsed, dest_map)
             if summary:
@@ -801,287 +985,426 @@ with main_col:
     tabs = st.tabs(["Recommendations","Flights","Trains","Hotels"])
     tab0, tab1, tab2, tab3 = tabs
 
+    # ---------------- Recommendations tab ----------------
     with tab0:
-        st.markdown("## Recommendations")
-        parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-        user_query = st.session_state.get("last_query", "") or ""
-        mode = st.session_state.get("last_mode", None)
+        only_mode = st.session_state.get("only_show_mode")
+        if only_mode and only_mode != "itinerary":
+            # non-itinerary "focused" view: keep existing message
+            st.markdown("### Showing requested results only")
+            st.info(f"Showing only **{only_mode}** results for the last query. Click below to return to the full landing page.")
+            if st.button("⟵ Back to main", key="back_to_main_from_top"):
+                st.session_state["only_show_mode"] = None
+                st.session_state["last_mode"] = None
+        elif only_mode == "itinerary":
+            # ----------------- NEW ITINERARY BUNDLE VIEW -----------------
+            parsed = st.session_state.get("last_parsed", {}) or {}
+            user_query = st.session_state.get("last_query", "") or ""
+            st.markdown("### Showing requested results only")
+            st.info("Showing **itinerary** results for the last query. Click below to return to the full landing page.")
+            if st.button("⟵ Back to main", key="back_to_main_from_top_itin"):
+                st.session_state["only_show_mode"] = None
+                st.session_state["last_mode"] = None
 
-        st.markdown("### Quick summary")
-        if not user_query:
-            st.info("Use the right-hand 'Quick Ask' to request recommendations.")
-        else:
-            st.markdown(f"**Query:** {user_query}")
-            if parsed:
-                summary = render_parsed_summary(parsed, dest_map)
-                if summary:
-                    st.markdown("**Interpreted:** " + summary)
-        if mode:
-            st.markdown(f"**Detected intent:** {mode}")
+            st.markdown("----")
+            if user_query:
+                st.markdown(f"**Query:** {user_query}")
+            # NOTE: we intentionally still show parsed summary inside the itinerary view
+            # because it's helpful there. If you want to remove it from itinerary page too,
+            # remove the next two lines.
+            summary = render_parsed_summary(parsed, dest_map)
+            if summary:
+                st.markdown("**Interpreted:** " + summary)
 
-        st.markdown("### Top destinations for you")
-        dests = destination_recommendations(active_profile, parsed, limit=6)
-        cols = st.columns(3)
-        for i, d in enumerate(dests):
-            c = cols[i % 3]
-            with c:
-                thumb = make_svg_thumbnail(d["name"], bg_color=PALETTE[i % len(PALETTE)])
-                st.image(thumb, use_column_width=True, caption=f"{d['name']} • {', '.join(d['tags'])}")
-                if st.button(f"Explore {d['name']}", key=f"explore_dest_{d['id']}"):
-                    # set session explore flag and keep parsed signals
-                    st.session_state["explore_dest"] = d["id"]
-                    st.session_state["last_parsed"] = {**parsed, "destination_id": d["id"]}
-                    # also pre-generate quick_explore cache entry
-                    ev = build_explore_view(d["id"], active_profile, st.session_state.get("last_parsed", {}), active_user_id)
-                    if ev:
-                        key = f"quick_explore::{active_user_id}::{d['id']}"
-                        st.session_state["quick_explore_cache"][key] = f"Quick Explore — {ev['destination']['name']}: {ev['hotel_reason']}"
-
-        # If user has requested to explore a city, render Explore view inline
-        if st.session_state.get("explore_dest"):
-            ed = st.session_state.get("explore_dest")
-            st.markdown("---")
-            st.markdown(f"## Explore — {dest_map[ed]['name']}")
-            view = build_explore_view(ed, active_profile, st.session_state.get("last_parsed", {}), active_user_id)
-            if view is None:
-                st.info("No data for that destination.")
+            # build the full itinerary bundle
+            bundle = build_itinerary_bundle(active_profile, parsed, active_user_id)
+            if not bundle:
+                st.warning("Couldn't build an itinerary — try specifying a destination or budget.")
             else:
-                # Recommended hotel display
-                rec_h = view.get("recommended_hotel")
-                if rec_h:
-                    st.markdown("### Recommended hotel")
-                    c1, c2 = st.columns([2,4])
-                    with c1:
-                        hphoto = make_stock_photo(rec_h["id"], w=540, h=340)
+                dest = bundle["destination"]
+                nights = bundle["nights"]
+                st.markdown(f"## Trip to {dest['name']} · {nights} nights")
+
+                # Travel section: Flights & Trains
+                st.markdown("### Travel options")
+                c_f, c_t = st.columns(2)
+                with c_f:
+                    st.markdown("#### Flights")
+                    if not bundle["flights"]:
+                        st.write("_No matching flights in mock data_")
+                    else:
+                        for f in bundle["flights"]:
+                            logo = make_logo_svg("flight")
+                            st.markdown(
+                                f"<div class='icon-row'><img src='{logo}' class='logo-small'/> "
+                                f"<strong>{f['airline']}</strong> — {f['from']} → {f['to']} • "
+                                f"{format_rupee(f['price'])} • {f['stops']} stops • {f['departure_time']}</div>",
+                                unsafe_allow_html=True
+                            )
+                with c_t:
+                    st.markdown("#### Trains")
+                    if not bundle["trains"]:
+                        st.write("_No matching trains in mock data_")
+                    else:
+                        for t in bundle["trains"]:
+                            logo = make_logo_svg("train")
+                            st.markdown(
+                                f"<div class='icon-row'><img src='{logo}' class='logo-small'/> "
+                                f"<strong>Train</strong> — {t['from']} → {t['to']} • "
+                                f"{format_rupee(t['price'])} • {t['class']} • {t['departure_time']}</div>",
+                                unsafe_allow_html=True
+                            )
+
+                # Stays section
+                st.markdown("### Stays (recommended hotel)")
+                hotel = bundle["hotel"]
+                if hotel:
+                    hc1, hc2 = st.columns([2,4])
+                    with hc1:
+                        hphoto = make_stock_photo(hotel["id"], w=540, h=340)
                         st.image(hphoto, use_column_width=True)
-                    with c2:
-                        st.markdown(f"**{rec_h['name']}**")
-                        st.markdown(f"{', '.join(rec_h.get('tags', []))}")
-                        st.markdown(f"Rating: **{rec_h['rating']}★**")
-                        st.markdown(f"Price: **{format_rupee(rec_h['price'])}**")
-                        st.markdown(f"Why recommended: {view.get('hotel_reason')}")
-                        if st.button("Select this hotel", key=f"select_h_{rec_h['id']}"):
-                            st.session_state["chosen_hotel"] = rec_h["id"]
-                            st.success("Hotel selected for itinerary and distance calculations.")
+                    with hc2:
+                        st.markdown(f"**{hotel['name']}**")
+                        st.markdown(f"{', '.join(hotel.get('tags', []))}")
+                        st.markdown(f"Rating: **{hotel['rating']}★**")
+                        st.markdown(f"Price per night: **{format_rupee(hotel['price'])}**")
+                        st.markdown(f"Why recommended: {bundle['hotel_reason']}")
+                else:
+                    st.write("_No hotel found in mock data_")
 
-                # POIs grid
-                st.markdown("### Attractions & POIs")
-                poi_htmls = []
-                for p in view.get("pois", []):
-                    pid = p["id"]
-                    photo = make_poi_photo(pid, w=640, h=360)
-                    # compute travel & cost from chosen hotel if available; else use approx fields
-                    minutes = p.get("approx_travel_mins_from_hotel")
-                    cost = p.get("approx_cost_from_hotel")
-                    poi_htmls.append(poi_card_html(photo, p, minutes_from_hotel=minutes, cost_from_hotel=cost))
-                if poi_htmls:
-                    row_html = "<div style='display:flex;flex-wrap:wrap;gap:12px;'>" + "".join(poi_htmls) + "</div>"
-                    components.html(row_html, height=760, scrolling=True)
+                # Daily plan section with pace toggle
+                st.markdown("### Daily plan")
+                pace_label = st.radio(
+                    "Choose itinerary pace",
+                    ["Relaxed", "Normal", "Packed"],
+                    index=1,
+                    key="itinerary_pace_choice"
+                )
+                pace_key = pace_label.lower()
+                current_it = bundle["itineraries"].get(pace_key)
 
-                # Itinerary section
-                st.markdown("### Suggested itinerary (mock deterministic)")
-                it = view.get("itinerary", {})
-                for day in it.get("days", []):
-                    st.markdown(f"<div class='itinerary-day'><strong>{day['date']}</strong></div>", unsafe_allow_html=True)
-                    for slot in ["morning","afternoon","evening"]:
-                        items = day.get(slot, [])
-                        if items:
-                            cols = st.columns(len(items))
-                            for idx, poi in enumerate(items):
-                                with cols[idx]:
-                                    ph = make_poi_photo(poi["id"], w=320, h=180)
-                                    st.image(ph, use_column_width=True, caption=f"{poi['name']} ({poi.get('approx_travel_mins_from_hotel')} mins from hotel)")
-                                    st.markdown(f"**{slot.title()}** — {poi['name']}")
-                        else:
-                            st.markdown(f"*{slot.title()}: No recommendation*")
+                if not current_it:
+                    st.write("_No itinerary generated_")
+                else:
+                    total_poi_cost = 0
+                    day_list = current_it.get("days", [])
+                    for idx, day in enumerate(day_list, start=1):
+                        st.markdown(f"#### Day {idx} — {day.get('date','')}")
+                        for slot in ["morning", "afternoon", "evening"]:
+                            items = day.get(slot, [])
+                            if not items:
+                                continue
+                            st.markdown(f"**{slot.title()}**")
+                            for poi in items:
+                                cost = poi.get("approx_cost_from_hotel", 0) or 0
+                                mins = poi.get("approx_travel_mins_from_hotel", "?")
+                                total_poi_cost += cost
+                                st.markdown(
+                                    f"- {poi['name']} · {mins} mins from hotel · {format_rupee(cost)}"
+                                )
+
+                    # cost summary for selected pace
+                    cs = bundle["cost_summary"].get(pace_key, {})
+                    if cs:
+                        st.markdown("---")
+                        st.markdown(
+                            f"**Estimated trip cost ({pace_key}): "
+                            f"{format_rupee(cs['min'])} – {format_rupee(cs['max'])} "
+                            f"for {nights} nights**"
+                        )
+                        with st.expander("Cost breakdown (approximate)"):
+                            st.write(f"Travel (cheapest option): {format_rupee(cs['travel_cost'])}")
+                            st.write(f"Hotel ({nights} nights): {format_rupee(cs['hotel_cost'])}")
+                            st.write(f"Activities / POIs: {format_rupee(cs['poi_cost'])}")
                 st.markdown("---")
-                if st.button("Close explore", key="close_explore"):
-                    st.session_state["explore_dest"] = None
+        else:
+            # ------------------- Original recommendations landing -------------------
+            # NOTE: per your request, we remove the "Quick summary / Query / Interpreted" block
+            # from the main Recommendations landing to keep it clean.
+            st.markdown("## Recommendations")
 
-        # quick hotels (as before)
-        if st.session_state.get("_show_top_hotels") or mode in ["hotels","mixed"]:
-            st.markdown("### Top hotels (quick)")
-            recs = hotel_recommendations(active_profile, parsed, limit=6)
-            if not recs:
-                st.info("No hotels found for that query")
-            else:
-                card_htmls = []
-                for i, hotel in enumerate(recs):
-                    photo = make_stock_photo(hotel["id"])
-                    base_card = hotel_card_html(photo, hotel)
-                    key = f"{active_user_id}_{hotel['id']}"
-                    if key not in st.session_state["explain_cache"]:
-                        st.session_state["explain_cache"][key] = explain_with_gemini(hotel, active_profile, parsed)
-                    expl_html = f"<div class='hotel-explain'>{st.session_state['explain_cache'][key]}</div>"
-                    card_with_expl = base_card.replace("<!--EXPLAIN-->", expl_html)
-                    card_htmls.append(card_with_expl)
-                if card_htmls:
-                    full_html = "<div class='card-row'>" + "".join(card_htmls) + "</div>"
-                    components.html(full_html, height=380, scrolling=True)
+            # show top destinations immediately (no 'quick summary' text)
+            parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
+            dests = destination_recommendations(active_profile, parsed, limit=6)
+            cols_r = st.columns(3)
+            for i, d in enumerate(dests):
+                c = cols_r[i % 3]
+                with c:
+                    thumb = make_svg_thumbnail(d["name"], bg_color=PALETTE[i % len(PALETTE)])
+                    st.image(thumb, use_column_width=True, caption=f"{d['name']} • {', '.join(d['tags'])}")
+                    if st.button(f"Explore {d['name']}", key=f"explore_dest_{d['id']}"):
+                        st.session_state["explore_dest"] = d["id"]
+                        st.session_state["last_parsed"] = {**parsed, "destination_id": d["id"]}
+                        ev = build_explore_view(d["id"], active_profile, st.session_state.get("last_parsed", {}), active_user_id)
+                        if ev:
+                            key = f"quick_explore::{active_user_id}::{d['id']}"
+                            st.session_state["quick_explore_cache"][key] = f"Quick Explore — {ev['destination']['name']}: {ev['hotel_reason']}"
 
-    # Flights / Trains / Hotels tabs (functional)
+            if st.session_state.get("explore_dest"):
+                ed = st.session_state.get("explore_dest")
+                st.markdown("---")
+                st.markdown(f"## Explore — {dest_map[ed]['name']}")
+                view = build_explore_view(ed, active_profile, st.session_state.get("last_parsed", {}), active_user_id)
+                if view is None:
+                    st.info("No data for that destination.")
+                else:
+                    rec_h = view.get("recommended_hotel")
+                    if rec_h:
+                        st.markdown("### Recommended hotel")
+                        c1, c2 = st.columns([2,4])
+                        with c1:
+                            hphoto = make_stock_photo(rec_h["id"], w=540, h=340)
+                            st.image(hphoto, use_column_width=True)
+                        with c2:
+                            st.markdown(f"**{rec_h['name']}**")
+                            st.markdown(f"{', '.join(rec_h.get('tags', []))}")
+                            st.markdown(f"Rating: **{rec_h['rating']}★**")
+                            st.markdown(f"Price: **{format_rupee(rec_h['price'])}**")
+                            st.markdown(f"Why recommended: {view.get('hotel_reason')}")
+                            if st.button("Select this hotel", key=f"select_h_{rec_h['id']}"):
+                                st.session_state["chosen_hotel"] = rec_h["id"]
+                                st.success("Hotel selected for itinerary and distance calculations.")
+
+                    st.markdown("### Attractions & POIs")
+                    poi_htmls = []
+                    for p in view.get("pois", []):
+                        pid = p["id"]
+                        photo = make_poi_photo(pid, w=640, h=360)
+                        minutes = p.get("approx_travel_mins_from_hotel")
+                        cost = p.get("approx_cost_from_hotel")
+                        poi_htmls.append(poi_card_html(photo, p, minutes_from_hotel=minutes, cost_from_hotel=cost))
+                    if poi_htmls:
+                        row_html = "<div style='display:flex;flex-wrap:wrap;gap:12px;'>" + "".join(poi_htmls) + "</div>"
+                        components.html(row_html, height=760, scrolling=True)
+
+                    st.markdown("### Suggested itinerary (mock deterministic)")
+                    it = view.get("itinerary", {})
+                    for day in it.get("days", []):
+                        st.markdown(f"<div class='itinerary-day'><strong>{day['date']}</strong></div>", unsafe_allow_html=True)
+                        for slot in ["morning","afternoon","evening"]:
+                            items = day.get(slot, [])
+                            if items:
+                                cols_d = st.columns(len(items))
+                                for idx, poi in enumerate(items):
+                                    with cols_d[idx]:
+                                        ph = make_poi_photo(poi["id"], w=320, h=180)
+                                        st.image(ph, use_column_width=True, caption=f"{poi['name']} ({poi.get('approx_travel_mins_from_hotel')} mins from hotel)")
+                                        st.markdown(f"**{slot.title()}** — {poi['name']}")
+                            else:
+                                st.markdown(f"*{slot.title()}: No recommendation*")
+                    st.markdown("---")
+                    if st.button("Close explore", key="close_explore"):
+                        st.session_state["explore_dest"] = None
+                        st.session_state["only_show_mode"] = None
+                        st.session_state["last_mode"] = None
+
+            mode = st.session_state.get("last_mode", None)
+            if st.session_state.get("_show_top_hotels") or mode in ["hotels","mixed"]:
+                st.markdown("### Top hotels (quick)")
+                parsed_local = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
+                recs = hotel_recommendations(active_profile, parsed_local, limit=6)
+                if not recs:
+                    st.info("No hotels found for that query")
+                else:
+                    card_htmls = []
+                    for i, hotel in enumerate(recs):
+                        photo = make_stock_photo(hotel["id"])
+                        base_card = hotel_card_html(photo, hotel)
+                        key = f"{active_user_id}_{hotel['id']}"
+                        if key not in st.session_state["explain_cache"]:
+                            st.session_state["explain_cache"][key] = explain_with_gemini(hotel, active_profile, st.session_state.get("last_parsed", {}))
+                        expl_html = f"<div class='hotel-explain'>{st.session_state['explain_cache'][key]}</div>"
+                        card_with_expl = base_card.replace("<!--EXPLAIN-->", expl_html)
+                        card_htmls.append(card_with_expl)
+                    if card_htmls:
+                        full_html = "<div class='card-row'>" + "".join(card_htmls) + "</div>"
+                        components.html(full_html, height=380, scrolling=True)
+
+    # ---------------- Flights tab ----------------
     with tab1:
-        st.markdown("## Flights")
-        c1, c2 = st.columns([1,2])
-        with c1:
-            st.markdown("### Filters")
-            parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-            to_default = None
-            if parsed.get("destination_id"):
-                to_default = dest_map[parsed["destination_id"]]["name"]
-            from_default = parsed.get("origin") or None
-            price_default = parsed.get("budget_max") or 15000
-            stops_default = parsed.get("max_stops") if parsed.get("max_stops") is not None else 2
-
-            origins = ["Any","Mumbai","Delhi","Bengaluru","Chennai","Kolkata","Hyderabad","Pune"]
-            from_idx = 0
-            if from_default and from_default in origins:
-                from_idx = origins.index(from_default)
-            from_city = st.selectbox("From", origins, index=from_idx, key="flt_from_main")
-            to_options = ["Any"] + [d["name"] for d in destinations]
-            to_idx = 0
-            if to_default and to_default in to_options:
-                to_idx = to_options.index(to_default)
-            to_city = st.selectbox("To", to_options, index=to_idx, key="flt_to_main")
-            max_price = st.number_input("Max price (₹)", value=int(price_default) if price_default else 15000, key="flt_max_price")
-            max_stops = st.selectbox("Max stops", [0,1,2], index=0 if stops_default==0 else (1 if stops_default==1 else 2), key="flt_max_stops")
-            apply_f = st.button("Apply flight filters", key="apply_flights_main")
-
-        with c2:
-            st.markdown("### Results")
-            if apply_f:
-                to_val = None if to_city == "Any" else to_city
-                from_val = None if from_city == "Any" else from_city
-                res = filter_flights({"from": from_val, "to": to_val, "max_price": max_price, "max_stops": max_stops})
-            else:
+        only_mode = st.session_state.get("only_show_mode")
+        if only_mode and only_mode != "flights":
+            st.info(f"Query locked to **{only_mode}** view. Click Back to view Flights normally.")
+            if st.button("⟵ Back to main (from Flights)", key="back_from_flights"):
+                st.session_state["only_show_mode"] = None
+                st.session_state["last_mode"] = None
+        else:
+            st.markdown("## Flights")
+            c1, c2 = st.columns([1,2])
+            with c1:
+                st.markdown("### Filters")
                 parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-                origin_val = parsed.get("origin")
-                to_val = None
+                to_default = None
                 if parsed.get("destination_id"):
-                    to_val = dest_map[parsed["destination_id"]]["name"]
-                elif parsed.get("destination"):
-                    to_val = resolve_city_name(parsed.get("destination"))
-                max_price = _normalize_max_price(parsed.get("budget_max") or parsed.get("max_price")) or 15000
-                max_stops = parsed.get("max_stops")
-                res = filter_flights({"from": origin_val, "to": to_val, "max_price": max_price, "max_stops": max_stops})
+                    to_default = dest_map[parsed["destination_id"]]["name"]
+                from_default = parsed.get("origin") or None
+                price_default = parsed.get("budget_max") or 15000
+                stops_default = parsed.get("max_stops") if parsed.get("max_stops") is not None else 2
 
-            if not res:
-                st.info("No flights found with those filters")
-            else:
-                for flight in res[:results_limit]:
-                    logo = make_logo_svg("flight")
-                    st.markdown(f"<div class='icon-row'><img src='{logo}' class='logo-small'/> <strong>{flight['airline']}</strong> — {flight['from']} → {flight['to']} • {format_rupee(flight['price'])} • {flight['stops']} stops</div>", unsafe_allow_html=True)
-                    if st.button(f"Book flight {flight['id']}", key=f"book_f_{flight['id']}"):
-                        log_event("book_flight", active_user_id, flight["id"])
-                        st.success("Flight booked (mock)")
+                origins = ["Any","Mumbai","Delhi","Bengaluru","Chennai","Kolkata","Hyderabad","Pune"]
+                from_idx = 0
+                if from_default and from_default in origins:
+                    from_idx = origins.index(from_default)
+                from_city = st.selectbox("From", origins, index=from_idx, key="flt_from_main")
+                to_options = ["Any"] + [d["name"] for d in destinations]
+                to_idx = 0
+                if to_default and to_default in to_options:
+                    to_idx = to_options.index(to_default)
+                to_city = st.selectbox("To", to_options, index=to_idx, key="flt_to_main")
+                max_price = st.number_input("Max price (₹)", value=int(price_default) if price_default else 15000, key="flt_max_price")
+                max_stops = st.selectbox("Max stops", [0,1,2], index=0 if stops_default==0 else (1 if stops_default==1 else 2), key="flt_max_stops")
+                apply_f = st.button("Apply flight filters", key="apply_flights_main")
 
+            with c2:
+                st.markdown("### Results")
+                if apply_f:
+                    to_val = None if to_city == "Any" else to_city
+                    from_val = None if from_city == "Any" else from_city
+                    res = filter_flights({"from": from_val, "to": to_val, "max_price": max_price, "max_stops": max_stops})
+                else:
+                    parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
+                    origin_val = parsed.get("origin")
+                    to_val = None
+                    if parsed.get("destination_id"):
+                        to_val = dest_map[parsed["destination_id"]]["name"]
+                    elif parsed.get("destination"):
+                        to_val = resolve_city_name(parsed.get("destination"))
+                    max_price = _normalize_max_price(parsed.get("budget_max") or parsed.get("max_price")) or 15000
+                    max_stops = parsed.get("max_stops")
+                    res = filter_flights({"from": origin_val, "to": to_val, "max_price": max_price, "max_stops": max_stops})
+
+                if not res:
+                    st.info("No flights found with those filters")
+                else:
+                    for flight in res[:results_limit]:
+                        logo = make_logo_svg("flight")
+                        st.markdown(f"<div class='icon-row'><img src='{logo}' class='logo-small'/> <strong>{flight['airline']}</strong> — {flight['from']} → {flight['to']} • {format_rupee(flight['price'])} • {flight['stops']} stops</div>", unsafe_allow_html=True)
+                        if st.button(f"Book flight {flight['id']}", key=f"book_f_{flight['id']}"):
+                            log_event("book_flight", active_user_id, flight["id"])
+                            st.success("Flight booked (mock)")
+
+    # ---------------- Trains tab ----------------
     with tab2:
-        st.markdown("## Trains")
-        c1, c2 = st.columns([1,2])
-        with c1:
-            st.markdown("### Filters")
-            parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-            from_default = parsed.get("origin")
-            to_default = None
-            if parsed.get("destination_id"):
-                to_default = dest_map[parsed["destination_id"]]["name"]
-            max_price_default = parsed.get("budget_max") or 3000
-
-            origins = ["Any","Mumbai","Delhi","Bengaluru","Chennai","Kolkata","Hyderabad","Pune"]
-            from_idx = 0
-            if from_default and from_default in origins:
-                from_idx = origins.index(from_default)
-            t_from = st.selectbox("From", origins, index=from_idx, key="trn_from_main")
-            t_to_options = ["Any"] + [d["name"] for d in destinations]
-            t_to_idx = 0
-            if to_default and to_default in t_to_options:
-                t_to_idx = t_to_options.index(to_default)
-            t_to = st.selectbox("To", t_to_options, index=t_to_idx, key="trn_to_main")
-            seat_class = st.selectbox("Class", ["Any","Sleeper","3A","2A","CC"], index=0, key="trn_class_main")
-            max_price_train = st.number_input("Max price (₹)", value=int(max_price_default), key="trn_max_price")
-            apply_t = st.button("Apply train filters", key="apply_trains_main")
-        with c2:
-            st.markdown("### Results")
-            if apply_t:
-                from_val = None if t_from=="Any" else t_from
-                to_val = None if t_to=="Any" else t_to
-                tres = filter_trains({"from": from_val, "to": to_val, "seat_class": None if seat_class=="Any" else seat_class, "max_price": max_price_train})
-            else:
+        only_mode = st.session_state.get("only_show_mode")
+        if only_mode and only_mode != "trains":
+            st.info(f"Query locked to **{only_mode}** view. Click Back to view Trains normally.")
+            if st.button("⟵ Back to main (from Trains)", key="back_from_trains"):
+                st.session_state["only_show_mode"] = None
+                st.session_state["last_mode"] = None
+        else:
+            st.markdown("## Trains")
+            c1, c2 = st.columns([1,2])
+            with c1:
+                st.markdown("### Filters")
                 parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-                origin_val = parsed.get("origin")
-                to_val = None
+                from_default = parsed.get("origin")
+                to_default = None
                 if parsed.get("destination_id"):
-                    to_val = dest_map[parsed["destination_id"]]["name"]
-                max_price_train = _normalize_max_price(parsed.get("budget_max")) or 3000
-                tres = filter_trains({"from": origin_val, "to": to_val, "seat_class": None, "max_price": max_price_train})
+                    to_default = dest_map[parsed["destination_id"]]["name"]
+                max_price_default = parsed.get("budget_max") or 3000
 
-            if not tres:
-                st.info("No trains found")
-            else:
-                for train in tres[:results_limit]:
-                    logo = make_logo_svg("train")
-                    st.markdown(f"<div class='icon-row'><img src='{logo}' class='logo-small'/> <strong>Train</strong> — {train['from']} → {train['to']} • {format_rupee(train['price'])} • {train['class']}</div>", unsafe_allow_html=True)
-                    if st.button(f"Book train {train['id']}", key=f"book_t_{train['id']}"):
-                        log_event("book_train", active_user_id, train['id'])
-                        st.success("Train booked (mock)")
+                origins = ["Any","Mumbai","Delhi","Bengaluru","Chennai","Kolkata","Hyderabad","Pune"]
+                from_idx = 0
+                if from_default and from_default in origins:
+                    from_idx = origins.index(from_default)
+                t_from = st.selectbox("From", origins, index=from_idx, key="trn_from_main")
+                t_to_options = ["Any"] + [d["name"] for d in destinations]
+                t_to_idx = 0
+                if to_default and to_default in t_to_options:
+                    t_to_idx = t_to_options.index(to_default)
+                t_to = st.selectbox("To", t_to_options, index=t_to_idx, key="trn_to_main")
+                seat_class = st.selectbox("Class", ["Any","Sleeper","3A","2A","CC"], index=0, key="trn_class_main")
+                max_price_train = st.number_input("Max price (₹)", value=int(max_price_default), key="trn_max_price")
+                apply_t = st.button("Apply train filters", key="apply_trains_main")
+            with c2:
+                st.markdown("### Results")
+                if apply_t:
+                    from_val = None if t_from=="Any" else t_from
+                    to_val = None if t_to=="Any" else t_to
+                    tres = filter_trains({"from": from_val, "to": to_val, "seat_class": None if seat_class=="Any" else seat_class, "max_price": max_price_train})
+                else:
+                    parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
+                    origin_val = parsed.get("origin")
+                    to_val = None
+                    if parsed.get("destination_id"):
+                        to_val = dest_map[parsed["destination_id"]]["name"]
+                    max_price_train = _normalize_max_price(parsed.get("budget_max")) or 3000
+                    tres = filter_trains({"from": origin_val, "to": to_val, "seat_class": None, "max_price": max_price_train})
 
+                if not tres:
+                    st.info("No trains found")
+                else:
+                    for train in tres[:results_limit]:
+                        logo = make_logo_svg("train")
+                        st.markdown(f"<div class='icon-row'><img src='{logo}' class='logo-small'/> <strong>Train</strong> — {train['from']} → {train['to']} • {format_rupee(train['price'])} • {train['class']}</div>", unsafe_allow_html=True)
+                        if st.button(f"Book train {train['id']}", key=f"book_t_{train['id']}"):
+                            log_event("book_train", active_user_id, train['id'])
+                            st.success("Train booked (mock)")
+
+    # ---------------- Hotels tab ----------------
     with tab3:
-        st.markdown("## Hotels")
-        c1, c2 = st.columns([1,2])
-        with c1:
-            st.markdown("### Filters")
-            parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-            dest_default = None
-            if parsed.get("destination_id"):
-                dest_default = dest_map[parsed["destination_id"]]["name"]
-            price_default = parsed.get("budget_max") or 8000
-            rating_default = 3.5
-
-            dest_options = ["Any"] + [d["name"] for d in destinations]
-            dest_idx = 0
-            if dest_default and dest_default in dest_options:
-                dest_idx = dest_options.index(dest_default)
-            dest_choice = st.selectbox("Destination", dest_options, index=dest_idx, key="htl_dest_main")
-            price_range = st.slider("Price range (₹)", 500, 10000, (500, int(price_default) if price_default else 8000), key="htl_price_main")
-            min_rating = st.slider("Min rating", 2.0, 5.0, float(rating_default), key="htl_rating_main")
-            apply_h = st.button("Apply hotel filters", key="apply_hotels_main")
-        with c2:
-            st.markdown("### Results")
-            if apply_h:
-                res = [h for h in hotels if (dest_choice=="Any" or dest_map[h["destination_id"]]["name"]==dest_choice) and price_range[0] <= h["price"] <= price_range[1] and h["rating"]>=min_rating]
-            else:
+        only_mode = st.session_state.get("only_show_mode")
+        if only_mode and only_mode != "hotels":
+            st.info(f"Query locked to **{only_mode}** view. Click Back to view Hotels normally.")
+            if st.button("⟵ Back to main (from Hotels)", key="back_from_hotels"):
+                st.session_state["only_show_mode"] = None
+                st.session_state["last_mode"] = None
+        else:
+            st.markdown("## Hotels")
+            c1, c2 = st.columns([1,2])
+            with c1:
+                st.markdown("### Filters")
                 parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
-                dflt_dest = None
+                dest_default = None
                 if parsed.get("destination_id"):
-                    dflt_dest = dest_map[parsed["destination_id"]]["name"]
-                budget = _normalize_max_price(parsed.get("budget_max")) or None
-                res = hotels
-                if dflt_dest:
-                    res = [h for h in res if dest_map[h["destination_id"]]["name"]==dflt_dest]
-                if budget:
-                    res = [h for h in res if h["price"] <= budget]
-                res = sorted(res, key=lambda x: score_item(x, active_profile, user_past_trips=user_map[active_user_id].get("past_trips", [])), reverse=True)
+                    dest_default = dest_map[parsed["destination_id"]]["name"]
+                price_default = parsed.get("budget_max") or 8000
+                rating_default = 3.5
 
-            if not res:
-                st.info("No hotels found")
-            else:
-                card_htmls = []
-                for i, hotel in enumerate(res[:results_limit]):
-                    photo = make_stock_photo(hotel["id"])
-                    base_card = hotel_card_html(photo, hotel)
-                    key = f"{active_user_id}_{hotel['id']}"
-                    if key not in st.session_state["explain_cache"]:
-                        st.session_state["explain_cache"][key] = explain_with_gemini(hotel, active_profile, st.session_state.get("last_parsed", {}))
-                    expl_html = f"<div class='hotel-explain'>{st.session_state['explain_cache'][key]}</div>"
-                    card_htmls.append(base_card.replace("<!--EXPLAIN-->", expl_html))
-                if card_htmls:
-                    full_html = "<div class='card-row'>" + "".join(card_htmls) + "</div>"
-                    components.html(full_html, height=380, scrolling=True)
+                dest_options = ["Any"] + [d["name"] for d in destinations]
+                dest_idx = 0
+                if dest_default and dest_default in dest_options:
+                    dest_idx = dest_options.index(dest_default)
+                dest_choice = st.selectbox("Destination", dest_options, index=dest_idx, key="htl_dest_main")
+                price_range = st.slider("Price range (₹)", 500, 10000, (500, int(price_default) if price_default else 8000), key="htl_price_main")
+                min_rating = st.slider("Min rating", 2.0, 5.0, float(rating_default), key="htl_rating_main")
+                apply_h = st.button("Apply hotel filters", key="apply_hotels_main")
+            with c2:
+                st.markdown("### Results")
+                if apply_h:
+                    res = [h for h in hotels if (dest_choice=="Any" or dest_map[h["destination_id"]]["name"]==dest_choice) and price_range[0] <= h["price"] <= price_range[1] and h["rating"]>=min_rating]
+                else:
+                    parsed = st.session_state.get("last_parsed", {}) if st.session_state.get("last_query") else {}
+                    dflt_dest = None
+                    if parsed.get("destination_id"):
+                        dflt_dest = dest_map[parsed["destination_id"]]["name"]
+                    budget = _normalize_max_price(parsed.get("budget_max")) or None
+                    res = hotels
+                    if dflt_dest:
+                        res = [h for h in res if dest_map[h["destination_id"]]["name"]==dflt_dest]
+                    if budget:
+                        res = [h for h in res if h["price"] <= budget]
+                    res = sorted(res, key=lambda x: score_item(x, active_profile, user_past_trips=user_map[active_user_id].get("past_trips", [])), reverse=True)
 
-                for hotel in res[:results_limit]:
-                    if st.button(f"Book (mock) - {hotel['name']}", key=f"book_h_{hotel['id']}"):
-                        log_event("book_hotel", active_user_id, hotel["id"])
-                        st.success("Booked (mock)")
+                if not res:
+                    st.info("No hotels found")
+                else:
+                    card_htmls = []
+                    for i, hotel in enumerate(res[:results_limit]):
+                        photo = make_stock_photo(hotel["id"])
+                        base_card = hotel_card_html(photo, hotel)
+                        key = f"{active_user_id}_{hotel['id']}"
+                        if key not in st.session_state["explain_cache"]:
+                            st.session_state["explain_cache"][key] = explain_with_gemini(hotel, active_profile, st.session_state.get("last_parsed", {}))
+                        expl_html = f"<div class='hotel-explain'>{st.session_state['explain_cache'][key]}</div>"
+                        card_htmls.append(base_card.replace("<!--EXPLAIN-->", expl_html))
+                    if card_htmls:
+                        full_html = "<div class='card-row'>" + "".join(card_htmls) + "</div>"
+                        components.html(full_html, height=380, scrolling=True)
+
+                    for hotel in res[:results_limit]:
+                        if st.button(f"Book (mock) - {hotel['name']}", key=f"book_h_{hotel['id']}"):
+                            log_event("book_hotel", active_user_id, hotel["id"])
+                            st.success("Booked (mock)")
 
 st.markdown("---")
 st.markdown("**Notes**: this prototype uses generated mock data. Remote LLM is disabled by default to avoid quota issues; toggle `USE_GEMINI` in gemini_wrapper.py if you have a paid quota and want to re-enable LLM calls.")
