@@ -1408,4 +1408,5 @@ with main_col:
                             st.success("Booked (mock)")
 
 st.markdown("---")
-st.markdown("**Notes**: this prototype uses generated mock data. Remote LLM is disabled by default to avoid quota issues; toggle `USE_GEMINI` in gemini_wrapper.py if you have a paid quota and want to re-enable LLM calls.")
+st.markdown("**Notes**: this prototype uses generated mock data.")
+
