@@ -780,7 +780,7 @@ cols = st.columns([0.6,5,0.6])
 with cols[0]:
     if st.button("☰", key="burger_btn"): st.session_state["show_sidebar"] = not st.session_state["show_sidebar"]
 with cols[1]:
-    st.markdown("<div class='header-row'><div><span class='brand'>Travel Reco</span><div class='subtle'>Personalized recommendations for you</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='header-row'><div><span class='brand'>Recce</span><div class='subtle'>Personalized recommendations for you</div></div></div>", unsafe_allow_html=True)
     active_user_preview = st.empty()
 with cols[2]:
     st.markdown("")
@@ -810,8 +810,8 @@ active_user_preview.markdown(f"<div style='font-size:14px;color:#333;'>Welcome, 
 main_col, side_col = st.columns([3,1])
 
 with side_col:
-    st.markdown("### Quick Ask (LLM-enabled)")
-    query = st.text_input("Ask (e.g. 'flights to Kolkata under 5k')", key="side_query", value=st.session_state.get("last_query",""))
+    st.markdown("### Quickiebot")
+    query = st.text_input("Ask (e.g. 'Plan a quick itenary from delhi to kolkata')", key="side_query", value=st.session_state.get("last_query",""))
     run_query = st.button("Ask", key="side_go")
     parsed_preview = st.empty()
     show_parser_debug = st.checkbox("Show parser debug", value=False, key="parser_debug")
