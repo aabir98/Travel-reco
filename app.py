@@ -1129,7 +1129,8 @@ with main_col:
             for i, d in enumerate(dests):
                 c = cols_r[i % 3]
                 with c:
-                    thumb = make_svg_thumbnail(d["name"], bg_color=PALETTE[i % len(PALETTE)])
+                    # REPLACED: use stock photo for destination card (Picsum), keeping deterministic seed
+                    thumb = make_stock_photo(d["id"], w=640, h=340)
                     st.image(thumb, use_column_width=True, caption=f"{d['name']} • {', '.join(d['tags'])}")
                     if st.button(f"Explore {d['name']}", key=f"explore_dest_{d['id']}"):
                         st.session_state["explore_dest"] = d["id"]
